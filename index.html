@@ -33,14 +33,12 @@
         .btn { padding: 12px; width: 100%; background: var(--secondary-color); border: none; color: white; font-size: 16px; cursor: pointer; font-weight: bold; border-radius: 5px; transition: 0.3s; }
         .btn:hover { opacity: 0.9; }
         
-        /* 互動列表與顯示卡片 */
         .clickable-item { background: #e8f8f5; padding: 12px; margin-top: 6px; border-left: 5px solid var(--secondary-color); cursor: pointer; font-weight: bold; border-radius: 0 5px 5px 0; transition: 0.2s; }
         .clickable-item:hover { background: #d1f2eb; }
         
         .card { border: 1px solid #eee; border-radius: 8px; padding: 20px; margin-top: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .recipe-ingredients { background: var(--light-color); padding: 15px; border-radius: 5px; border-left: 5px solid var(--primary-color); white-space: pre-wrap; line-height: 1.5; }
         
-        /* 管理員表格設計（復原為第一版本樣式） */
         .admin-section-2 { margin-top: 30px; border-top: 2px dashed #eee; padding-top: 20px; }
         .admin-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
         .admin-table th, .admin-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
@@ -66,7 +64,6 @@
         <h2>👤 使用者搜尋模式 (雲端即時同步)</h2>
         <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
         
-        <!-- 下拉搜尋模式選擇 -->
         <div class="field">
             <label>🔍 請選擇搜尋方式：</label>
             <select id="search-mode-select" onchange="switchSearchMode()">
@@ -75,25 +72,21 @@
             </select>
         </div>
 
-        <!-- 類別下拉 -->
         <div id="area-cat" class="field">
             <label>▼ 請選擇食譜類別：</label>
             <select id="sel-cat" onchange="searchByCategory()"></select>
             <div id="panel-cat-list" style="margin-top: 10px;"></div>
         </div>
 
-        <!-- 菜式名稱下拉 -->
         <div id="area-name" class="field hidden">
             <label>▼ 請選擇菜式名稱：</label>
             <select id="sel-name" onchange="searchByName()"></select>
         </div>
 
-        <!-- 內容顯示主面板 (共享區) -->
         <div id="content-display"></div>
         
         <br><hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
 
-        <!-- 食材搜尋 -->
         <div class="field">
             <label>🌾 依食材搜尋適用食譜：</label>
             <div style="display: flex; gap: 10px;">
@@ -105,7 +98,6 @@
     </div>
 
     <script>
-        // 【已自動整合】已串接您的專屬 Firebase 即時資料庫網址
         var firebaseConfig = {
             databaseURL: "https://firebasedatabase.app"
         };
@@ -113,23 +105,20 @@
         var database = firebase.database();
         var dbRef = database.ref('recipes');
 
-        // 本地變數快取，用於資料排版比對
         var db = [];
 
-        // 全自動雲端監聽：不管是誰、用哪台裝置改了資料，所有開著網頁的人都會同時更新
         dbRef.on('value', function(snapshot) {
             var data = snapshot.val();
             db = [];
             if (data) {
                 for (var key in data) {
                     var item = data[key];
-                    item.id = key; // 鎖定雲端生成的獨特金鑰
+                    item.id = key;
                     db.push(item);
                 }
             }
             refreshDropdowns();
             refreshAdminTable();
-            // 每當雲端同步刷新，先清空當前顯示的食譜卡片以防資料衝突
             document.getElementById('content-display').innerHTML = '';
         });
 
@@ -174,7 +163,7 @@
             }
             for (var j = 0; j < cats.length; j++) {
                 var optC = document.createElement('option');
-                optC.value = j; // 綁定陣列指標
+                optC.value = j;
                 optC.textContent = cats[j];
                 cSelect.appendChild(optC);
             }
@@ -182,11 +171,10 @@
 
         function searchByCategory() {
             var selectEl = document.getElementById('sel-cat');
+            if (selectEl.value === "") { document.getElementById('panel-cat-list').innerHTML = ''; return; }
             var targetCat = selectEl.options[selectEl.selectedIndex].text;
             var listPanel = document.getElementById('panel-cat-list');
             document.getElementById('content-display').innerHTML = '';
-            
-            if (selectEl.value === "") { listPanel.innerHTML = ''; return; }
             
             var html = '<p style="color:#7f8c8d; font-size:14px; margin:5px 0;">請點擊下方菜式名稱展開完整內容：</p>';
             for (var i = 0; i < db.length; i++) {
@@ -237,8 +225,47 @@
             panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        // ================= 1. 管理員功能邏輯 =================
-        // 【成功復原】重現第一版本的現有食譜表格
+        // ================= 管理員畫面 =================
+    </script>
+    <div id="view-admin" class="container">
+        <h2>🔑 管理員管理後台</h2>
+        <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
+        
+        <div id="form-status-area" style="display:none;">
+            <span class="badge">🔄 您正在編輯現有食譜</span>
+            <button type="button" onclick="resetToInsert()" style="float:right; cursor:pointer; background:none; border:none; color:#3498db; font-weight:bold;">取消修改改為新增</button>
+        </div>
+        <h3 id="form-head">【第一部分】新增食譜資料</h3>
+        
+        <form onsubmit="saveData(event)" style="margin-top:15px;">
+            <input type="hidden" id="form-index" value="-1">
+            <div class="field">
+                <label>食譜名稱 (對應使用者模式之「菜式」)</label>
+                <input type="text" id="form-name" required placeholder="例如：番茄炒蛋">
+            </div>
+            <div class="field">
+                <label>食譜類別 (對應使用者模式之「類別」)</label>
+                <input type="text" id="form-cat" required placeholder="例如：家常菜">
+            </div>
+            <div class="field">
+                <label>食材資料 (請用分行隔開)</label>
+                <textarea id="form-ing" required placeholder="例如：番茄2個&#10;雞蛋3顆"></textarea>
+            </div>
+            <button type="submit" id="form-submit-btn" class="btn" style="background: var(--primary-color);">💾 點擊儲存食譜到雲端</button>
+        </form>
+
+        <div class="admin-section-2">
+            <h3>【第二部分】所有食譜清單</h3>
+            <table class="admin-table">
+                <thead>
+                    <tr><th style="width: 50%;">食譜名稱 (菜式)</th><th style="width: 30%;">類別</th><th style="width: 20%;">操作</th></tr>
+                </thead>
+                <tbody id="admin-table-rows"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
         function refreshAdminTable() {
             var tbody = document.getElementById('admin-table-rows');
             tbody.innerHTML = '';
@@ -258,7 +285,6 @@
             }
         }
 
-        // 點擊編輯：將雲端特定的食譜撈回上方表單
         function startEdit(index) {
             var recipe = db[index];
             document.getElementById('form-index').value = index;
@@ -295,11 +321,9 @@
             var item = { name: name, category: cat, ingredients: ing };
 
             if (idx === -1) {
-                // A. 全新新增
                 dbRef.push(item);
                 alert('食譜已成功儲存到雲端！連線的手機與電腦已全面即時同步。');
             } else {
-                // B. 修改編輯
                 var targetId = db[idx].id;
                 database.ref('recipes/' + targetId).set(item);
                 alert('食譜已成功更新至雲端！所有裝置同步變更。');

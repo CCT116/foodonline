@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <title>簡易食譜分享平台 (雲端即時同步版)</title>
     <!-- 使用最高相容性的標準非同步方式載入 Google Firebase 核心套件 -->
-    <script async src="https://gstatic.com"></script>
-    <script async src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
     <style>
         :root {
             --primary-color: #ff6b6b;
@@ -97,72 +97,86 @@
         </div>
     </div>
 
+    <!-- ================= 管理員畫面 ================= -->
+    <div id="view-admin" class="container">
+        <h2>🔑 管理員管理後台</h2>
+        <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
+        
+        <div id="form-status-area" style="display:none;">
+            <span class="badge">🔄 您正在編輯現有食譜</span>
+            <button type="button" onclick="resetToInsert()" style="float:right; cursor:pointer; background:none; border:none; color:#3498db; font-weight:bold;">取消修改改為新增</button>
+        </div>
+        <h3 id="form-head">【第一部分】新增食譜資料</h3>
+        
+        <form onsubmit="saveData(event)" style="margin-top:15px;">
+            <input type="hidden" id="form-index" value="-1">
+            <div class="field">
+                <label>食譜名稱 (對應使用者模式之「菜式」)</label>
+                <input type="text" id="form-name" required placeholder="例如：番茄炒蛋">
+            </div>
+            <div class="field">
+                <label>食譜類別 (對應使用者模式之「類別」)</label>
+                <input type="text" id="form-cat" required placeholder="例如：家常菜">
+            </div>
+            <div class="field">
+                <label>食材資料 (請用分行隔開)</label>
+                <textarea id="form-ing" required placeholder="例如：番茄2個&#10;雞蛋3顆"></textarea>
+            </div>
+            <button type="submit" id="form-submit-btn" class="btn" style="background: var(--primary-color);">💾 點擊儲存食譜到雲端</button>
+            <button type="button" onclick="runDiagnosis()" class="btn" style="background: #6c5ce7; margin-top: 10px;">🔍 啟動網頁全自動錯誤診斷</button>
+        </form>
+
+        <div class="admin-section-2">
+            <h3>【第二部分】所有食譜清單</h3>
+            <table class="admin-table">
+                <thead>
+                    <tr><th style="width: 50%;">食譜名稱 (菜式)</th><th style="width: 30%;">類別</th><th style="width: 20%;">操作</th></tr>
+                </thead>
+                <tbody id="admin-table-rows"></tbody>
+            </table>
+        </div>
+    </div>
+
     <script>
         var database, dbRef;
         var db = [];
         var isFirebaseInitialized = false;
 
-        // 當網頁完全載入，且確保 Google Firebase 庫已經就緒後再進行連結
-        window.addEventListener('load', function() {
-            var checkInterval = setInterval(function() {
-                if (typeof firebase !== 'undefined') {
-                    clearInterval(checkInterval);
-                    try {
-                        var firebaseConfig = {
-                            databaseURL: "https://firebasedatabase.app"
-                        };
-                        firebase.initializeApp(firebaseConfig);
-                        database = firebase.database();
-                        dbRef = database.ref('recipes');
-                        isFirebaseInitialized = true;
+        // 【核心優化】改用相容性最高的無間斷輪詢檢查，一偵測到套件就完成初始化，絕不卡死
+        var checkInterval = setInterval(function() {
+            if (typeof firebase !== 'undefined') {
+                clearInterval(checkInterval);
+                try {
+                    // 已直接內嵌並鎖定您的專屬雲端網址
+                    var firebaseConfig = {
+                        databaseURL: "https://foodonline-9bf6e-default-rtdb.asia-southeast1.firebasedatabase.app"
+                    };
+                    firebase.initializeApp(firebaseConfig);
+                    database = firebase.database();
+                    dbRef = database.ref('recipes');
+                    isFirebaseInitialized = true;
 
-                        // 監聽雲端資料庫
-                        dbRef.on('value', function(snapshot) {
-                            var data = snapshot.val();
-                            db = [];
-                            if (data) {
-                                for (var key in data) {
-                                    var item = data[key];
-                                    item.id = key;
-                                    db.push(item);
-                                }
+                    // 監聽雲端即時資料庫
+                    dbRef.on('value', function(snapshot) {
+                        var data = snapshot.val();
+                        db = [];
+                        if (data) {
+                            for (var key in data) {
+                                var item = data[key];
+                                item.id = key;
+                                db.push(item);
                             }
-                            refreshDropdowns();
-                            refreshAdminTable();
-                            document.getElementById('content-display').innerHTML = '';
-                        }, function(error) {
-                            console.error("資料庫讀取失敗:", error);
-                        });
-                    } catch (e) {
-                        console.error("Firebase 初始化發生錯誤:", e);
-                    }
+                        }
+                        refreshDropdowns();
+                        refreshAdminTable();
+                    }, function(error) {
+                        console.error("雲端讀取失敗:", error);
+                    });
+                } catch (e) {
+                    console.error("Firebase 連線發生衝突:", e);
                 }
-            }, 100);
-        });
-
-        function changePage(mode) {
-            document.getElementById('view-user').className = (mode === 'user') ? 'container active' : 'container';
-            document.getElementById('view-admin').className = (mode === 'admin') ? 'container active' : 'container';
-            document.getElementById('tab-user-btn').className = (mode === 'user') ? 'mode-btn active' : 'mode-btn';
-            document.getElementById('tab-admin-btn').className = (mode === 'admin') ? 'mode-btn active' : 'mode-btn';
-            if (mode === 'user') {
-                resetToInsert();
-                refreshDropdowns();
-            } else {
-                refreshAdminTable();
             }
-        }
-
-        function switchSearchMode() {
-            var mode = document.getElementById('search-mode-select').value;
-            document.getElementById('area-cat').className = (mode === 'cat') ? 'field' : 'field hidden';
-            document.getElementById('area-name').className = (mode === 'name') ? 'field' : 'field hidden';
-            
-            document.getElementById('panel-cat-list').innerHTML = '';
-            document.getElementById('content-display').innerHTML = '';
-            document.getElementById('sel-cat').value = '';
-            document.getElementById('sel-name').value = '';
-        }
+        }, 100);
         function refreshDropdowns() {
             var cSelect = document.getElementById('sel-cat');
             var nSelect = document.getElementById('sel-name');
@@ -211,14 +225,14 @@
 
         function runDiagnosis() {
             if (typeof firebase === 'undefined') {
-                alert("❌ 診斷結果：Firebase 核心庫未載入！這通常是你的手機/電腦網路封鎖了 Google 的 cdn 套件庫（gstatic.com），或是你的網路不穩定，導致瀏覽器根本沒加載雲端功能。");
+                alert("❌ 診斷提示：網頁依舊抓不到雲端核心程式庫。這意味著你的手機/電腦網路或廣告封鎖軟體把 Google 的雲端代碼庫（gstatic.com）當作追蹤器擋掉了，請更換瀏覽器或關閉廣告阻擋器再試。");
                 return;
             }
             if (!isFirebaseInitialized) {
-                alert("❌ 診斷結果：Firebase 庫已下載，但初始化失敗！請檢查專屬網址是否有拼錯字母。");
+                alert("❌ 診斷提示：雲端核心程式已抓到，但尚未與你的 Firebase 專屬網址取得連線通訊。");
                 return;
             }
-            alert("⏳ 診斷結果：前端網頁運作完全正常！請嘗試輸入食譜，按下儲存。若按下後依然沒動靜，代表你的 Firebase 資料庫後台「Rules」(安全規則) 沒有發布成功，或者寫入權限依然是 false，導致雲端拒絕接收資料！");
+            alert("⏳ 診斷提示：目前前端網頁與雲端資料庫的連線完全暢通無阻！如果你輸入食譜按儲存依舊卡住，代表你在 Firebase 後台「Rules (規則)」分頁裡的權限還沒有發布為公開讀寫（即 .read 與 .write 必須都是 true），請去 Firebase 後台發布規則。");
         }
 
         function searchByIngredient() {
@@ -270,12 +284,12 @@
         <form onsubmit="saveData(event)" style="margin-top:15px;">
             <input type="hidden" id="form-index" value="-1">
             <div class="field">
-                <label>食譜名稱 (對應使用者模式之「菜式」)</label>
+                <label>食譜名稱 (菜式)</label>
                 <input type="text" id="form-name" required placeholder="例如：番茄炒蛋">
             </div>
             <div class="field">
-                <label>食譜類別 (對應使用者模式之「類別」)</label>
-                <input type="text" id="form-cat" required placeholder="例如：家常菜">
+                <label>食譜類別 (類別)</label>
+                <input type="text" id="form-cat" required placeholder="example：家常菜">
             </div>
             <div class="field">
                 <label>食材資料 (請用分行隔開)</label>
@@ -295,12 +309,13 @@
             </table>
         </div>
     </div>
+
     <script>
         function refreshAdminTable() {
             var tbody = document.getElementById('admin-table-rows');
             tbody.innerHTML = '';
             if (db.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#aaa;">雲端資料庫目前無任何食譜，請由上方表單新增。</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#aaa;">雲端目前無任何食譜，請由上方表單新增。</td></tr>';
                 return;
             }
             for (var i = 0; i < db.length; i++) {
@@ -344,7 +359,7 @@
         function saveData(event) {
             event.preventDefault();
             if (!isFirebaseInitialized) {
-                alert("錯誤：雲端資料庫套件尚未就緒，請檢查您的網路或重新整頁。");
+                alert("錯誤：雲端伺服器連線尚未完全就緒，請稍候 2 秒或點擊下方「診斷」按鈕查看原因。");
                 return;
             }
             
@@ -359,7 +374,7 @@
                 if (idx === -1) {
                     dbRef.push(item, function(error) {
                         if (error) {
-                            alert("❌ 儲存失敗！原因是 Firebase 資料庫拒絕寫入。這通常代表你沒在 Firebase 的 Rules (規則) 標籤內將寫入改為 true 並點擊發布。");
+                            alert("❌ 儲存失敗！資料庫拒絕寫入。這代表你在 Firebase 的 Rules (規則) 分頁裡未將 .write 改為 true 並發布。");
                         } else {
                             alert('🎉 食譜已成功儲存到雲端！連線的手機與電腦已全面即時同步。');
                             resetToInsert();
@@ -369,7 +384,7 @@
                     var targetId = db[idx].id;
                     database.ref('recipes/' + targetId).set(item, function(error) {
                         if (error) {
-                            alert("❌ 修改失敗！雲端資料庫拒絕了你的權限。");
+                            alert("❌ 修改失敗！雲端資料庫拒絕了你的修改權限。");
                         } else {
                             alert('🎉 食譜已成功更新至雲端！所有裝置同步變更。');
                             resetToInsert();
@@ -377,7 +392,7 @@
                     });
                 }
             } catch (err) {
-                alert("致命錯誤：無法發送資料，請點擊「診斷」按鈕。");
+                alert("錯誤：資料無法發送至雲端，請點擊診斷。");
             }
         }
 
